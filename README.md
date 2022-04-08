@@ -23,7 +23,7 @@ The `environment.yml` file contains the packages needed to run the code with pyt
 
 ### Train a NN with ttbar events with bias
 
-```python wgan.py --generator_iters 100000 --model ttbarGAN --data ttbar --trainingLabel ttbartraining --do_what train ```
+```python wgan.py --generator_iters 100000 --model ttbarGAN --data ttbar --trainingLabel ttbartraining --do_what train --do_what generate --n_samples 70000 --save_samples pt```
 
 
 
