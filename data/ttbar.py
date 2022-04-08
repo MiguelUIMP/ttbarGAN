@@ -119,7 +119,7 @@ class ttbar_LatentGen(data.Dataset):
     
     
     def latent_path(self):
-        return os.path.join(self.root, self.processed_unbias_folder, self.unbias_file)
+        return os.path.join(self.root, self.unbias_folder, "unbias_ttbar.root")
     
 
     def download(self):
@@ -182,7 +182,7 @@ class ttbar_data_loader:
         pass
 
     def get_data_loader(self, batch_size):
-        training_set = ttbar_TrainGen( root='', download=True, transform=None)
+        training_set = ttbar_TrainGen( root='~/MiguelGAN', download=True, transform=None)
         assert training_set
 
         train_dataloader = data.DataLoader(training_set, batch_size=batch_size, shuffle=True)
@@ -190,7 +190,7 @@ class ttbar_data_loader:
         return train_dataloader, None
     
     def get_latent_loader(self, batch_size):
-        latent_set = ttbar_LatentGen( root='', download=True, transform=None)
+        latent_set = ttbar_LatentGen( root='~/MiguelGAN', download=True, transform=None)
         assert latent_set
 
         train_dataloader = data.DataLoader(latent_set, batch_size=batch_size, shuffle=True)
