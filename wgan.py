@@ -255,10 +255,11 @@ class WGAN_trainer:
     def generate_samples(self, number_of_samples, save_as, label="", load_model=True ):
         if load_model:
             self.load_model("FINAL")
-        latent_data = read_root_files(self.latent_path, generate=True) 
+        latent_data = read_root_files([self.latent_path], generate=True) 
         samples=[]
         for _ in range(number_of_samples):
-            z=self.get_torch_variable( torch.cat( (self.generate_latent_space(1), latent_data[randint(low=0, high=latent_data.shape[0]), :]), dim=1 ) )
+            z=self.get_torch_variable( torch.cat( (self.generate_latent_space(1), torch.reshape(latent_data[randint(low=0, high=latent_data.shape[0]), :], (-1,1))), dim=1 ) )
+            self.G.eval()
             sample=self.G(z).data.cpu()
             samples.append( sample ) 
             print(sample)
@@ -319,6 +320,6 @@ if __name__=="__main__":
 #
 #   Typical use of the ttbar code:
 #   
-#   python wgan.py --generator_iters 100 --model ttbarGAN --data ttbar --trainingLabel ttbartraining --do_what train
+#   python wgan.py --generator_iters 100000 --model ttbarGAN --data ttbar --trainingLabel ttbartraining --do_what train --do_what generate --n_samples 70000 --save_samples pt
 #
 ###################
