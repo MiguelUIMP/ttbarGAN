@@ -59,8 +59,8 @@ class ttbarGAN():
     def __init__(self):
         channels = 1 # canales de salida de los datos, cuantas variables obtener
         random_noise = 10 # canales de ruido aleatorio que meter
-        self.G=DenseNNgenerator(channels, random_noise)
-        self.D=DenseNNdiscriminator(channels)
+        self.G=DenseNNgenerator(channels=channels, random_noise=random_noise)
+        self.D=DenseNNdiscriminator(channels=channels)
         '''
         expresiones lambda en python:
             sirven para utilizar una funcion sin tener que definirla ni darla un nombre
