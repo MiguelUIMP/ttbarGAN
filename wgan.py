@@ -1,13 +1,15 @@
 import torch
 from torch.autograd import Variable
-
+import uproot
 import os 
 
 from models.all_models import all_models
 from data.data_loaders import get_data
+from data.ttbar import read_root_files
 
 import matplotlib.pyplot as plt
-
+from numpy.random import randint
+import pandas as pd
 
 class WGAN_trainer:
     def __init__(self, opts):
@@ -31,7 +33,7 @@ class WGAN_trainer:
         # these are torch.utils.data.dataloader.DataLoader which will load Tensor dims batch_size x 34
         self.train_loader,_ = get_data(self._options).get_data_loader(self.batch_size)
         if opts.model == 'ttbarGAN':
-            self.latent_loader,_ = get_data(self._options).get_latent_loader(self.batch_size)
+            self.latent_loader, self.latent_path= get_data(self._options).get_latent_loader(self.batch_size)
         '''
         
         Para generar muestras del evento TODO
@@ -151,7 +153,7 @@ class WGAN_trainer:
         def get_infinite_batches(data_loader):
             while True:
                 for i, images in enumerate(data_loader):
-                    print(i)
+                    print("mini-batch:",i)
                     yield images
                     
         # generator objects, with .__next__() method returns a batch of loaded data 
@@ -198,8 +200,8 @@ class WGAN_trainer:
                 p.requires_grad = False  
             
             self.G.zero_grad()  # we need to set the gradients to zero, otherwise pytorch will sum them every time we call backward
-
-            fake_data=self.get_torch_variable(self.generate_latent_space(self.batch_size))
+            images_lat=latent.__next__()
+            fake_data=self.get_torch_variable( torch.cat( (self.generate_latent_space(self.batch_size), images_lat), dim=1 ) ) # TODO: the latent space is hardcoded, should be an input (use a lambda function in the models.)
             loss_b=torch.mean(self.D(self.G(fake_data))) # because the gradient then goes with a minus
             loss_b.backward()
             optim_generator.step()
@@ -236,30 +238,52 @@ class WGAN_trainer:
         torch.save(self.D.state_dict(), f'{self._options.trainingLabel}_discriminator{label}.pkl')
         print(f'Models save to {self._options.trainingLabel}_discriminator_{label}.pkl & {self._options.trainingLabel}_generator_{label}.pkl')
 
-    def load_model(self):
+    def load_model(self,label=""):
         # usually postprocessing is done in the cpu, but could be customized in the future
-        self.G.load_state_dict(torch.load(f'./{self._options.trainingLabel}_generator.pkl',map_location=torch.device('cpu')))
-        self.D.load_state_dict(torch.load(f'./{self._options.trainingLabel}_discriminator.pkl',map_location=torch.device('cpu'))) 
+        self.G.load_state_dict(torch.load(f'./{self._options.trainingLabel}_generator{label}.pkl',map_location=torch.device('cpu')))
+        self.D.load_state_dict(torch.load(f'./{self._options.trainingLabel}_discriminator{label}.pkl',map_location=torch.device('cpu'))) 
+
+
 
     '''
-    
     Para generar muestras del proceso TODO:
         En el momento de generar el espacio latente ¿le metemos todo numeros random
         o tendremos que meterle algun suceso realista ya que le hemos entrenado con
         un espacio latente con estructura?
+    '''
     
-    def generate_samples(self, number_of_samples, label="",load_model=True):
+    def generate_samples(self, number_of_samples, save_as, label="", load_model=True ):
         if load_model:
-            self.load_model()
+            self.load_model("FINAL")
+        latent_data = read_root_files(self.latent_path, generate=True) 
         samples=[]
         for _ in range(number_of_samples):
-            z=self.get_torch_variable(self.generate_latent_space(1) )
+            z=self.get_torch_variable( torch.cat( (self.generate_latent_space(1), latent_data[randint(low=0, high=latent_data.shape[0]), :]), dim=1 ) )
             sample=self.G(z).data.cpu()
             samples.append( sample ) 
             print(sample)
-        self.postProcessSamples( samples, label ) 
         
-    '''
+        self.save_samples(samples, toPytorch=(save_as=='pt' or save_as=='all'), toRoot=(save_as=='root' or save_as=='all'))
+        #self.postProcessSamples( samples, label )  
+        
+    
+    def save_samples(self, samples, toPytorch=True, toRoot=True):
+        path = '/'.join(self.latent_path.split('/')[:-2])
+        samples_tensor = torch.squeeze(torch.stack(samples))
+        
+        if toPytorch:
+            with open(os.path.join(path, 'samples_ttbar.pt'), 'wb') as f:
+                torch.save(samples_tensor, f)
+                print("Samples successfully saved in:", os.path.join(path, 'samples_ttbar.pt'))
+        
+        if toRoot:
+            with uproot.recreate(os.path.join(path, 'samples_ttbar.root')) as f:
+                df = pd.DataFrame(samples_tensor).astype("float")
+                df.columns=['ptlep1']
+                f['t'] = df
+                print("Samples successfully saved in:", os.path.join(path, 'samples_ttbar.root'))
+
+
 
 if __name__=="__main__":
 
@@ -278,6 +302,7 @@ if __name__=="__main__":
     parser.add_option("--do_what",           dest="do_what", action='append', type="string", default=[], help="What to do");
     parser.add_option("--trainingLabel",           dest="trainingLabel",  type="string", default='trainingv1', help="Label where store to/read from the models");
     parser.add_option("--n_samples",           dest="n_samples",  type="int", default=12, help="Number of samples to be generated");
+    parser.add_option("--save_samples",           dest="save_samples",  type="string", default="all", help="How to save the samples generated: in .pt (use pt), in .root (use root), both (use all), or do not save (use none)");
     (options, args) = parser.parse_args()
 
     model = WGAN_trainer(options)
@@ -288,12 +313,12 @@ if __name__=="__main__":
         model.trainTTbar()
         
     if 'generate' in options.do_what:
-        model.generate_samples(options.n_samples)
+        model.generate_samples(options.n_samples, options.save_samples)
         
 ###################
 #
 #   Typical use of the ttbar code:
 #   
-#   python wgan.py --generator_iters 100000 --model ttbarGAN --data ttbar --trainingLabel ttbartraining --do_what train
+#   python wgan.py --generator_iters 100 --model ttbarGAN --data ttbar --trainingLabel ttbartraining --do_what train
 #
 ###################
